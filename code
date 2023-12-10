@@ -1,0 +1,71 @@
+#include <Arduino.h>
+#include <WiFi.h>
+#include <PMS5003.h>
+
+// Define WiFi credentials
+const char* ssid = "YOUR_WIFI_SSID";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+// Define server address
+const char* serverAddress = "YOUR_SERVER_ADDRESS";
+const int serverPort = 80;
+
+// Define sensor pins
+#define PMS_RX_PIN 12
+#define PMS_TX_PIN 13
+#define MQ_2_PIN A0
+
+// Instantiate PMS5003 sensor object
+PMS5003 sensor(PMS_RX_PIN, PMS_TX_PIN);
+
+void setup() {
+  // Set serial baud rate for PMS5003 sensor
+  Serial.begin(9600);
+
+  // Connect to WiFi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.println("Connecting to WiFi..");
+  }
+  Serial.println("Connected to the WiFi network");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {
+  // Read sensor data
+  sensor.readData();
+
+  // Get PM1.0, PM2.5, and PM10 values
+  float pm1_0 = sensor.getPM1_0Concentration();
+  float pm2_5 = sensor.getPM2_5Concentration();
+  float pm10 = sensor.getPM10Concentration();
+
+  // Read MQ-2 gas sensor
+  int gasConcentration = analogRead(MQ_2_PIN);
+
+  // Prepare data string
+  String dataString = "pm1_0=" + String(pm1_0) + "&pm2_5=" + String(pm2_5) + "&pm10=" + String(pm10) + "&gas_concentration=" + String(gasConcentration);
+
+  // Send data to server
+  WiFiClient client;
+  if (client.connect(serverAddress, serverPort)) {
+    client.print("GET /?data=" + dataString + " HTTP/1.1\r\n");
+    client.print("Host: " + serverAddress + "\r\n");
+    client.print("\r\n");
+
+    // Read response from server
+    while (client.available()) {
+      char c = client.read();
+      Serial.print(c);
+    }
+
+    client.stop();
+  } else {
+    Serial.println("Failed to connect to server");
+  }
+
+  // Delay between readings
+  delay(1000);
+}
